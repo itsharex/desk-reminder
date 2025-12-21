@@ -32,18 +32,18 @@ fn play_notification_sound() {
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
-        let script = "
-            $paths = @('C:\\Windows\\Media\\Windows Notify System Generic.wav', 'C:\\Windows\\Media\\Notify.wav', 'C:\\Windows\\Media\\chimes.wav');
-            foreach ($path in $paths) {
-                if (Test-Path $path) {
-                    (New-Object System.Media.SoundPlayer $path).PlaySync();
-                    break;
-                }
-            }
-        ";
+        use std::os::windows::process::CommandExt; // 导入 Windows 特定的 trait
+        // 使用 PowerShell 但完全隐藏窗口，避免闪现
         let _ = Command::new("powershell")
-            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", script])
-            .spawn();
+            .args([
+                "-NoProfile",
+                "-WindowStyle", "Hidden",
+                "-ExecutionPolicy", "Bypass",
+                "-Command",
+                "Add-Type -AssemblyName System.Sound; [System.Media.SystemSounds]::Beep.Play();"
+            ])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW 标志
+            .output();
     }
 }
 
