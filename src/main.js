@@ -44,7 +44,6 @@ async function init() {
   
   try {
     settings.autoStart = await isEnabled();
-    console.log('Real autostart status:', settings.autoStart);
   } catch (e) {
     console.error('Failed to check autostart status', e);
   }
@@ -103,10 +102,13 @@ function saveStats() {
 function tick() {
   if (isPaused) return;
   stats.workMinutes = Math.floor((Date.now() - workStartTime) / 60000);
+  
   settings.tasks.forEach(task => {
     if (task.enabled && countdowns[task.id] > 0) {
       countdowns[task.id]--;
       if (countdowns[task.id] === 0) {
+        // 核心改进：触发提醒时立即重置计时，实现并行计时
+        countdowns[task.id] = task.interval * 60; 
         triggerNotification(task);
       }
     }
@@ -119,17 +121,19 @@ async function triggerNotification(task) {
   if (settings.soundEnabled) {
     invoke('play_notification_sound').catch(() => {});
   }
+  // 发送系统通知
   invoke('show_notification', { title: task.title, body: task.desc }).catch(console.error);
   renderFullUI(); 
 }
 
 function dismissNotification() {
   if (!activePopup) return;
+  
+  // 点击“我知道了”仅记录统计数据，不再负责计时重置（重置已在触发时提前完成）
   const id = activePopup.id;
   if (id === 'sit') stats.sitBreaks++;
   if (id === 'water') stats.waterCups++;
-  const task = settings.tasks.find(t => t.id === id);
-  if (task) countdowns[id] = task.interval * 60;
+  
   activePopup = null;
   saveStats();
   renderFullUI();
@@ -311,7 +315,7 @@ function renderFullUI() {
       </div>
     </div>
 
-    <div class="footer">健康办公助手 v1.4 · 愿你每天都有好身体</div>
+    <div class="footer">健康办公助手 v1.4.1 · 愿你每天都有好身体</div>
   `;
 
   bindEvents();
@@ -321,10 +325,7 @@ function renderFullUI() {
 function bindEvents() {
   document.querySelectorAll('.toggle').forEach(el => {
     el.addEventListener('click', async (e) => {
-      console.log('Toggle clicked:', el.id || el.dataset.toggleId);
-      
       if (el.dataset.toggleId) {
-        // 任务卡片开关
         const task = settings.tasks.find(t => t.id === el.dataset.toggleId);
         if (task) {
           task.enabled = !task.enabled;
@@ -333,12 +334,10 @@ function bindEvents() {
           updateLiveValues();
         }
       } else if (el.id === 'soundToggle') {
-        // 提示音开关
         settings.soundEnabled = !settings.soundEnabled;
         el.classList.toggle('active', settings.soundEnabled);
         saveSettings();
       } else if (el.id === 'startToggle') {
-        // 自启动开关
         try {
           const newState = !settings.autoStart;
           if (newState) {
@@ -349,10 +348,8 @@ function bindEvents() {
           settings.autoStart = newState;
           el.classList.toggle('active', settings.autoStart);
           saveSettings();
-          console.log('Autostart toggled to:', settings.autoStart);
         } catch (err) {
           console.error('Failed to toggle autostart', err);
-          alert('设置自启动失败，请检查系统权限');
         }
       }
     });
@@ -406,7 +403,6 @@ function bindEvents() {
   document.getElementById('dismissBtn').onclick = dismissNotification;
   
   document.getElementById('testSoundBtn').onclick = () => {
-    console.log('Test sound button clicked');
     invoke('play_notification_sound').catch(e => console.error('Sound invoke failed:', e));
   };
 }
