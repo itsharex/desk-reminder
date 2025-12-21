@@ -15,10 +15,13 @@
 ### 核心看板 (Dashboard)
 ![Dashboard](./docs/screenshots/dashboard.png)
 
-### 功能详情 (Features)
-| 新增自定义任务 | 智能提醒 |
+### 任务排程 (Tasks)
+![Tasks](./docs/screenshots/tasks.png)
+
+### 智能提醒 (Notifications)
+| 应用内弹窗 | 系统级提醒 |
 | :---: | :---: |
-| ![Tasks](./docs/screenshots/tasks.png) | ![Notification](./docs/screenshots/弹窗提醒.png) |
+| ![In-app](./docs/screenshots/notification.png) | ![System](./docs/screenshots/弹窗提醒.png) |
 
 ---
 
