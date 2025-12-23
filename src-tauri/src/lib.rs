@@ -100,6 +100,22 @@ fn update_tray_tooltip(state: State<TrayState>, tooltip: String) {
     }
 }
 
+#[tauri::command]
+fn enter_lock_mode(window: tauri::Window) {
+    let _ = window.set_fullscreen(true);
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_closable(false);
+    let _ = window.set_minimizable(false);
+}
+
+#[tauri::command]
+fn exit_lock_mode(window: tauri::Window) {
+    let _ = window.set_fullscreen(false);
+    let _ = window.set_always_on_top(false);
+    let _ = window.set_closable(true);
+    let _ = window.set_minimizable(true);
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -115,6 +131,8 @@ pub fn run() {
             show_notification,
             show_main_window,
             update_tray_tooltip,
+            enter_lock_mode,
+            exit_lock_mode,
         ])
         .manage(TrayState(Mutex::new(None)))
         .setup(|app| {

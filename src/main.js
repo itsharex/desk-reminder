@@ -27,6 +27,8 @@ let settings = {
   tasks: [...DEFAULT_TASKS],
   soundEnabled: true,
   autoStart: false,
+  lockScreenEnabled: false,
+  lockDuration: 10,
 };
 
 let countdowns = {};
@@ -37,7 +39,14 @@ let stats = {
 };
 let isPaused = false;
 let workStartTime = Date.now();
-let activePopup = null; 
+let activePopup = null;
+let lockScreenState = {
+  active: false,
+  remaining: 0,
+  task: null,
+  unlockProgress: 0,
+  unlockTimer: null,
+}; 
 
 async function init() {
   await loadSettings();
@@ -121,13 +130,120 @@ function tick() {
 }
 
 async function triggerNotification(task) {
-  activePopup = { ...task };
   if (settings.soundEnabled) {
     invoke('play_notification_sound').catch(() => {});
   }
-  // 发送系统通知
   invoke('show_notification', { title: task.title, body: task.desc }).catch(console.error);
-  renderFullUI(); 
+  
+  if (settings.lockScreenEnabled) {
+    await startLockScreen(task);
+  } else {
+    activePopup = { ...task };
+    renderFullUI();
+  }
+}
+
+async function startLockScreen(task) {
+  lockScreenState = {
+    active: true,
+    remaining: settings.lockDuration,
+    task: { ...task },
+    unlockProgress: 0,
+    unlockTimer: null,
+  };
+  
+  try {
+    await invoke('enter_lock_mode');
+  } catch (e) {
+    console.error('Failed to enter lock mode', e);
+  }
+  
+  renderFullUI();
+  
+  const lockInterval = setInterval(() => {
+    if (!lockScreenState.active) {
+      clearInterval(lockInterval);
+      return;
+    }
+    
+    lockScreenState.remaining--;
+    updateLockScreenTimer();
+    
+    if (lockScreenState.remaining <= 0) {
+      clearInterval(lockInterval);
+      endLockScreen();
+    }
+  }, 1000);
+}
+
+async function endLockScreen() {
+  lockScreenState.active = false;
+  
+  const id = lockScreenState.task?.id;
+  if (id === 'sit') stats.sitBreaks++;
+  if (id === 'water') stats.waterCups++;
+  saveStats();
+  
+  try {
+    await invoke('exit_lock_mode');
+  } catch (e) {
+    console.error('Failed to exit lock mode', e);
+  }
+  
+  renderFullUI();
+}
+
+function updateLockScreenTimer() {
+  const secondsEl = document.querySelector('.lock-seconds');
+  const progressEl = document.querySelector('.lock-timer-ring .progress');
+  
+  if (secondsEl) {
+    secondsEl.textContent = lockScreenState.remaining;
+  }
+  
+  if (progressEl) {
+    const total = settings.lockDuration;
+    const offset = 565 * (1 - lockScreenState.remaining / total);
+    progressEl.style.strokeDashoffset = offset;
+  }
+}
+
+function startUnlockPress() {
+  if (lockScreenState.unlockTimer) return;
+  
+  lockScreenState.unlockProgress = 0;
+  const btn = document.querySelector('.unlock-btn');
+  const progressBar = document.querySelector('.unlock-progress');
+  
+  if (btn) btn.classList.add('pressing');
+  
+  lockScreenState.unlockTimer = setInterval(() => {
+    lockScreenState.unlockProgress += 100 / 30;
+    
+    if (progressBar) {
+      progressBar.style.width = `${lockScreenState.unlockProgress}%`;
+    }
+    
+    if (lockScreenState.unlockProgress >= 100) {
+      cancelUnlockPress();
+      endLockScreen();
+    }
+  }, 100);
+}
+
+function cancelUnlockPress() {
+  if (lockScreenState.unlockTimer) {
+    clearInterval(lockScreenState.unlockTimer);
+    lockScreenState.unlockTimer = null;
+  }
+  
+  lockScreenState.unlockProgress = 0;
+  
+  const btn = document.querySelector('.unlock-btn');
+  const progressBar = document.querySelector('.unlock-progress');
+  
+  if (btn) btn.classList.remove('pressing');
+  if (progressBar) progressBar.style.width = '0';
 }
 
 function dismissNotification() {
@@ -314,6 +430,21 @@ function renderFullUI() {
     <div class="settings-section">
       <h3>系统设置</h3>
       <div class="setting-row">
+        <div class="setting-info">
+          <label>强制休息锁屏</label>
+          <span class="setting-desc">提醒时锁定屏幕，确保真正休息</span>
+        </div>
+        <div class="toggle ${settings.lockScreenEnabled ? 'active' : ''}" id="lockToggle"></div>
+      </div>
+      <div class="setting-row" style="${settings.lockScreenEnabled ? '' : 'opacity:0.5; pointer-events:none;'}">
+        <label>锁屏时长</label>
+        <div class="duration-select">
+          <button class="duration-btn ${settings.lockDuration === 10 ? 'active' : ''}" data-duration="10">10秒</button>
+          <button class="duration-btn ${settings.lockDuration === 20 ? 'active' : ''}" data-duration="20">20秒</button>
+          <button class="duration-btn ${settings.lockDuration === 30 ? 'active' : ''}" data-duration="30">30秒</button>
+        </div>
+      </div>
+      <div class="setting-row">
         <label>提示音</label>
         <div style="display:flex; gap:12px; align-items:center;">
           <button class="preset-btn" id="testSoundBtn" style="padding:4px 8px; display:flex; gap:4px; align-items:center;">${ICONS.volume} 测试</button>
@@ -332,6 +463,40 @@ function renderFullUI() {
         <h2>${activePopup ? activePopup.title : ''}</h2>
         <p>${activePopup ? activePopup.desc : ''}</p>
         <button class="btn btn-primary" id="dismissBtn">我知道了</button>
+      </div>
+    </div>
+
+    <div class="lock-screen ${lockScreenState.active ? 'show' : ''}">
+      <div class="lock-screen-particles">
+        ${Array.from({length: 20}, (_, i) => `<div class="particle" style="left:${Math.random()*100}%; top:${Math.random()*100}%; animation-delay:${Math.random()*6}s;"></div>`).join('')}
+      </div>
+      <div class="lock-screen-content">
+        <div class="lock-timer-ring">
+          <svg width="200" height="200" viewBox="0 0 200 200">
+            <defs>
+              <linearGradient id="lockGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#007aff"/>
+                <stop offset="100%" style="stop-color:#34c759"/>
+              </linearGradient>
+            </defs>
+            <circle class="bg" cx="100" cy="100" r="90" />
+            <circle class="progress" cx="100" cy="100" r="90" stroke-dasharray="565" stroke-dashoffset="0" />
+          </svg>
+          <div class="center-content">
+            <div class="lock-icon">${lockScreenState.task ? (ICONS[lockScreenState.task.icon] || ICONS.bell) : ICONS.eye}</div>
+            <div class="lock-seconds">${lockScreenState.remaining}</div>
+            <div class="lock-unit">秒</div>
+          </div>
+        </div>
+        <div class="lock-title">${lockScreenState.task?.title || '休息时间'}</div>
+        <div class="lock-message">${lockScreenState.task?.desc || '让身体和眼睛休息一下吧~'}</div>
+        <button class="unlock-btn" id="unlockBtn">
+          <div class="unlock-progress"></div>
+          <div class="unlock-text">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+            长按 3 秒紧急解锁
+          </div>
+        </button>
       </div>
     </div>
 
@@ -371,7 +536,20 @@ function bindEvents() {
         } catch (err) {
           console.error('Failed to toggle autostart', err);
         }
+      } else if (el.id === 'lockToggle') {
+        settings.lockScreenEnabled = !settings.lockScreenEnabled;
+        el.classList.toggle('active', settings.lockScreenEnabled);
+        saveSettings();
+        renderFullUI();
       }
+    });
+  });
+
+  document.querySelectorAll('.duration-btn').forEach(el => {
+    el.addEventListener('click', () => {
+      settings.lockDuration = parseInt(el.dataset.duration);
+      saveSettings();
+      renderFullUI();
     });
   });
 
@@ -425,6 +603,19 @@ function bindEvents() {
   document.getElementById('testSoundBtn').onclick = () => {
     invoke('play_notification_sound').catch(e => console.error('Sound invoke failed:', e));
   };
+
+  const unlockBtn = document.getElementById('unlockBtn');
+  if (unlockBtn) {
+    unlockBtn.addEventListener('mousedown', startUnlockPress);
+    unlockBtn.addEventListener('mouseup', cancelUnlockPress);
+    unlockBtn.addEventListener('mouseleave', cancelUnlockPress);
+    unlockBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startUnlockPress();
+    });
+    unlockBtn.addEventListener('touchend', cancelUnlockPress);
+    unlockBtn.addEventListener('touchcancel', cancelUnlockPress);
+  }
 }
 
 window.triggerNotification = triggerNotification;

@@ -467,3 +467,231 @@ body {
   width: 48px;
   height: 48px;
 }
+
+.lock-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lock-screen.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.lock-screen-content {
+  text-align: center;
+  transform: scale(0.9) translateY(20px);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lock-screen.show .lock-screen-content {
+  transform: scale(1) translateY(0);
+}
+
+.lock-timer-ring {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 32px;
+  position: relative;
+}
+
+.lock-timer-ring svg {
+  transform: rotate(-90deg);
+  filter: drop-shadow(0 0 20px rgba(0, 122, 255, 0.4));
+}
+
+.lock-timer-ring .bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 8;
+}
+
+.lock-timer-ring .progress {
+  fill: none;
+  stroke: url(#lockGradient);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.lock-timer-ring .center-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: white;
+}
+
+.lock-timer-ring .lock-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 8px;
+  color: rgba(255, 255, 255, 0.9);
+  animation: breathe 2s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+
+.lock-timer-ring .lock-seconds {
+  font-size: 3rem;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.lock-timer-ring .lock-unit {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 4px;
+}
+
+.lock-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.lock-message {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 48px;
+  max-width: 280px;
+}
+
+.unlock-btn {
+  position: relative;
+  padding: 16px 32px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.unlock-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.unlock-btn:active {
+  transform: scale(0.98);
+}
+
+.unlock-btn .unlock-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, rgba(255, 59, 48, 0.4), rgba(255, 59, 48, 0.6));
+  border-radius: 16px;
+  transition: width 0.1s linear;
+}
+
+.unlock-btn .unlock-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.unlock-btn .unlock-text svg {
+  width: 16px;
+  height: 16px;
+}
+
+.unlock-btn.pressing {
+  border-color: var(--danger);
+}
+
+.unlock-btn.pressing .unlock-text {
+  color: white;
+}
+
+.lock-screen-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.3; }
+  50% { transform: translateY(-100px) rotate(180deg); opacity: 0.8; }
+}
+
+.setting-row .setting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setting-row .setting-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.duration-select {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.duration-btn {
+  padding: 6px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.duration-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.duration-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
