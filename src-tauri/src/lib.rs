@@ -13,6 +13,115 @@ use tauri::{
 use tauri_plugin_notification::NotificationExt;
 use url::form_urlencoded;
 
+// ============= 跨平台空闲检测 =============
+
+/// 获取系统空闲时间（秒）
+/// Windows: 使用 GetLastInputInfo
+/// macOS: 使用 CGEventSourceSecondsSinceLastEventType
+/// Linux: 使用 X11 screensaver extension
+fn get_idle_seconds() -> u64 {
+    #[cfg(target_os = "windows")]
+    {
+        get_idle_seconds_windows()
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        get_idle_seconds_macos()
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        get_idle_seconds_linux()
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        0 // 不支持的平台返回 0
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn get_idle_seconds_windows() -> u64 {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
+    use windows::Win32::System::SystemInformation::GetTickCount;
+
+    unsafe {
+        let mut lii = LASTINPUTINFO {
+            cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+            dwTime: 0,
+        };
+
+        if GetLastInputInfo(&mut lii).as_bool() {
+            let current_tick = GetTickCount();
+            let idle_ms = current_tick.wrapping_sub(lii.dwTime);
+            (idle_ms / 1000) as u64
+        } else {
+            0
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn get_idle_seconds_macos() -> u64 {
+    use std::process::Command;
+
+    // 使用 ioreg 命令获取空闲时间（更可靠的方式）
+    let output = Command::new("ioreg")
+        .args(["-c", "IOHIDSystem"])
+        .output();
+
+    if let Ok(output) = output {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // 查找 HIDIdleTime 字段
+        for line in stdout.lines() {
+            if line.contains("HIDIdleTime") {
+                // 格式: "HIDIdleTime" = 1234567890
+                if let Some(value) = line.split('=').nth(1) {
+                    if let Ok(ns) = value.trim().parse::<u64>() {
+                        return ns / 1_000_000_000; // 纳秒转秒
+                    }
+                }
+            }
+        }
+    }
+    0
+}
+
+#[cfg(target_os = "linux")]
+fn get_idle_seconds_linux() -> u64 {
+    use x11::xlib::{XOpenDisplay, XCloseDisplay, XDefaultRootWindow};
+    use x11::xss::{XScreenSaverQueryInfo, XScreenSaverAllocInfo};
+    use std::ptr;
+
+    unsafe {
+        let display = XOpenDisplay(ptr::null());
+        if display.is_null() {
+            return 0;
+        }
+
+        let info = XScreenSaverAllocInfo();
+        if info.is_null() {
+            XCloseDisplay(display);
+            return 0;
+        }
+
+        let root = XDefaultRootWindow(display);
+        let result = XScreenSaverQueryInfo(display, root, info);
+
+        let idle_ms = if result != 0 {
+            (*info).idle
+        } else {
+            0
+        };
+
+        x11::xlib::XFree(info as *mut _);
+        XCloseDisplay(display);
+
+        (idle_ms / 1000) as u64
+    }
+}
+
 struct TrayState(Mutex<Option<TrayIcon>>);
 struct LockState(Mutex<Vec<String>>);
 struct PauseMenuState(Mutex<Option<MenuItem<tauri::Wry>>>);
@@ -27,6 +136,8 @@ pub struct TaskConfig {
     pub interval: u64,  // 分钟
     pub enabled: bool,
     pub icon: String,
+    #[serde(default)]
+    pub auto_reset_on_idle: bool,  // 空闲时自动重置
 }
 
 #[derive(Clone, Debug)]
@@ -44,6 +155,10 @@ struct TimerState {
     system_locked: bool,
     lock_screen_active: bool,
     lock_screen_start: Option<Instant>,  // 锁屏开始时间，用于补偿
+    // 空闲检测相关
+    idle_threshold_seconds: u64,  // 空闲阈值（秒），默认 300 秒 = 5 分钟
+    is_idle: bool,  // 当前是否处于空闲状态
+    idle_start: Option<Instant>,  // 进入空闲状态的时间点
 }
 
 impl TimerState {
@@ -55,6 +170,9 @@ impl TimerState {
             system_locked: false,
             lock_screen_active: false,
             lock_screen_start: None,
+            idle_threshold_seconds: 300,  // 默认 5 分钟
+            is_idle: false,
+            idle_start: None,
         }
     }
 }
@@ -322,20 +440,29 @@ fn get_countdowns() -> Vec<CountdownInfo> {
 #[tauri::command]
 fn timer_set_system_locked(locked: bool) {
     let mut state = get_timer_state().lock().unwrap();
+    let now = Instant::now();
+
     if locked && !state.system_locked {
         // 刚锁屏，记录暂停时间
         state.system_locked = true;
         if state.pause_start.is_none() {
-            state.pause_start = Some(Instant::now());
+            state.pause_start = Some(now);
         }
     } else if !locked && state.system_locked {
-        // 解锁，补偿时间
-        if let Some(pause_start) = state.pause_start {
-            let pause_duration = pause_start.elapsed();
-            for timer in state.tasks.values_mut() {
-                timer.reset_time += pause_duration;
+        // 解锁
+        let pause_duration = state.pause_start.map(|s| s.elapsed());
+
+        for timer in state.tasks.values_mut() {
+            if timer.config.auto_reset_on_idle {
+                // 勾选了"空闲重置"，直接重置为初始值
+                timer.reset_time = now;
+                timer.triggered = false;
+            } else if let Some(duration) = pause_duration {
+                // 没有勾选，补偿暂停时间
+                timer.reset_time += duration;
             }
         }
+
         state.system_locked = false;
         if !state.paused {
             state.pause_start = None;
@@ -363,12 +490,37 @@ fn timer_set_lock_screen_active(active: bool) {
     }
 }
 
+#[tauri::command]
+fn set_idle_threshold(seconds: u64) {
+    let mut state = get_timer_state().lock().unwrap();
+    state.idle_threshold_seconds = seconds;
+}
+
+#[tauri::command]
+fn get_idle_threshold() -> u64 {
+    let state = get_timer_state().lock().unwrap();
+    state.idle_threshold_seconds
+}
+
+#[derive(Clone, serde::Serialize)]
+struct IdleStatus {
+    is_idle: bool,
+    idle_seconds: u64,
+    threshold: u64,
+}
+
 fn start_timer_thread(app_handle: AppHandle) {
     thread::spawn(move || {
         loop {
             thread::sleep(Duration::from_secs(1));
 
             let mut tasks_to_trigger: Vec<TaskTriggeredPayload> = Vec::new();
+            let mut idle_status_changed = false;
+            let mut current_idle_status = IdleStatus {
+                is_idle: false,
+                idle_seconds: 0,
+                threshold: 300,
+            };
 
             {
                 let mut state = get_timer_state().lock().unwrap();
@@ -379,27 +531,73 @@ fn start_timer_thread(app_handle: AppHandle) {
                 }
 
                 let now = Instant::now();
+                let idle_seconds = get_idle_seconds();
+                let threshold = state.idle_threshold_seconds;
+                let was_idle = state.is_idle;
+                let is_now_idle = idle_seconds >= threshold;
 
-                for timer in state.tasks.values_mut() {
-                    if !timer.config.enabled || timer.triggered {
-                        continue;
+                // 检测空闲状态变化
+                if is_now_idle && !was_idle {
+                    // 刚进入空闲状态
+                    state.is_idle = true;
+                    state.idle_start = Some(now);
+                    idle_status_changed = true;
+
+                    // 重置所有勾选了「空闲重置」的任务
+                    for timer in state.tasks.values_mut() {
+                        if timer.config.auto_reset_on_idle && timer.config.enabled {
+                            timer.reset_time = now;
+                            timer.triggered = false;
+                        }
+                    }
+                } else if !is_now_idle && was_idle {
+                    // 刚从空闲状态恢复
+                    state.is_idle = false;
+
+                    // 重新开始倒计时（从头开始）
+                    for timer in state.tasks.values_mut() {
+                        if timer.config.auto_reset_on_idle && timer.config.enabled {
+                            timer.reset_time = now;
+                            timer.triggered = false;
+                        }
                     }
 
-                    let elapsed = now.duration_since(timer.reset_time).as_secs();
-                    let total_secs = timer.config.interval * 60;
+                    state.idle_start = None;
+                    idle_status_changed = true;
+                }
 
-                    if elapsed >= total_secs {
-                        // 触发提醒
-                        tasks_to_trigger.push(TaskTriggeredPayload {
-                            id: timer.config.id.clone(),
-                            title: timer.config.title.clone(),
-                            desc: timer.config.desc.clone(),
-                            icon: timer.config.icon.clone(),
-                        });
+                current_idle_status = IdleStatus {
+                    is_idle: state.is_idle,
+                    idle_seconds,
+                    threshold,
+                };
 
-                        // 重置计时，开始下一轮
-                        timer.reset_time = now;
-                        timer.triggered = false;
+                // 如果处于空闲状态，不检查任务触发（计时暂停）
+                if state.is_idle {
+                    // 空闲时不触发任何任务，但仍然发送倒计时更新
+                } else {
+                    // 正常检查任务触发
+                    for timer in state.tasks.values_mut() {
+                        if !timer.config.enabled || timer.triggered {
+                            continue;
+                        }
+
+                        let elapsed = now.duration_since(timer.reset_time).as_secs();
+                        let total_secs = timer.config.interval * 60;
+
+                        if elapsed >= total_secs {
+                            // 触发提醒
+                            tasks_to_trigger.push(TaskTriggeredPayload {
+                                id: timer.config.id.clone(),
+                                title: timer.config.title.clone(),
+                                desc: timer.config.desc.clone(),
+                                icon: timer.config.icon.clone(),
+                            });
+
+                            // 重置计时，开始下一轮
+                            timer.reset_time = now;
+                            timer.triggered = false;
+                        }
                     }
                 }
             }
@@ -407,6 +605,11 @@ fn start_timer_thread(app_handle: AppHandle) {
             // 发送触发事件到前端
             for task in tasks_to_trigger {
                 let _ = app_handle.emit("task-triggered", task);
+            }
+
+            // 发送空闲状态更新（只在状态变化时发送，或每 5 秒发送一次状态）
+            if idle_status_changed {
+                let _ = app_handle.emit("idle-status-changed", current_idle_status.clone());
             }
 
             // 每秒发送倒计时更新
@@ -624,6 +827,8 @@ pub fn run() {
             get_countdowns,
             timer_set_system_locked,
             timer_set_lock_screen_active,
+            set_idle_threshold,
+            get_idle_threshold,
         ])
         .manage(TrayState(Mutex::new(None)))
         .manage(LockState(Mutex::new(Vec::new())))

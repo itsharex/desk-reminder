@@ -20,9 +20,9 @@ const ICONS = {
 };
 
 const DEFAULT_TASKS = [
-  { id: 'sit', title: '久坐提醒', desc: '该起来活动了，走动一下吧~', interval: 45, enabled: true, icon: 'sit' },
-  { id: 'water', title: '喝水提醒', desc: '该喝口水了，保持水分充足~', interval: 60, enabled: true, icon: 'water' },
-  { id: 'eye', title: '护眼提醒', desc: '让眼睛休息一下，看看远处~', interval: 20, enabled: true, icon: 'eye' }
+  { id: 'sit', title: '久坐提醒', desc: '该起来活动了，走动一下吧~', interval: 45, enabled: true, icon: 'sit', lockDuration: 60, autoResetOnIdle: true },
+  { id: 'water', title: '喝水提醒', desc: '该喝口水了，保持水分充足~', interval: 60, enabled: true, icon: 'water', lockDuration: 60, autoResetOnIdle: true },
+  { id: 'eye', title: '护眼提醒', desc: '让眼睛休息一下，看看远处~', interval: 20, enabled: true, icon: 'eye', lockDuration: 60, autoResetOnIdle: true }
 ];
 
 let settings = {
@@ -31,6 +31,7 @@ let settings = {
   autoStart: false,
   lockScreenEnabled: false,
   lockDuration: 20,
+  idleThreshold: 300,  // 空闲阈值，秒，默认 5 分钟
 };
 
 let countdowns = {};  // 现在由后端事件更新
@@ -40,6 +41,7 @@ let stats = {
   workMinutes: 0,
 };
 let isPaused = false;
+let isIdle = false;  // 当前是否处于空闲状态
 let workStartTime = Date.now();
 let activePopup = null;
 let lockScreenState = {
@@ -64,7 +66,8 @@ async function syncTasksToBackend() {
     desc: t.desc,
     interval: t.interval,
     enabled: t.enabled,
-    icon: t.icon
+    icon: t.icon,
+    auto_reset_on_idle: t.autoResetOnIdle || false
   }));
   await invoke('sync_tasks', { tasks: tasksForBackend }).catch(console.error);
 }
@@ -134,6 +137,9 @@ async function init() {
   // 同步任务到后端定时器
   await syncTasksToBackend();
 
+  // 同步空闲阈值到后端
+  await invoke('set_idle_threshold', { seconds: settings.idleThreshold }).catch(console.error);
+
   renderFullUI();
 
   // 监听后端倒计时更新事件
@@ -151,6 +157,13 @@ async function init() {
     // 找到完整的任务配置
     const fullTask = settings.tasks.find(t => t.id === task.id) || task;
     await triggerNotification(fullTask);
+  });
+
+  // 监听空闲状态变化
+  listen('idle-status-changed', (event) => {
+    const status = event.payload;
+    isIdle = status.is_idle;
+    updateLiveValues();
   });
 
   listen('show-window', () => {
@@ -293,9 +306,12 @@ async function startLockScreen(task) {
   // 通知后端锁屏模式激活
   invoke('timer_set_lock_screen_active', { active: true }).catch(console.error);
 
+  // 使用任务级别的锁屏时长，如果没有则使用全局设置
+  const lockDuration = task.lockDuration || settings.lockDuration;
+
   lockScreenState = {
     active: true,
-    remaining: settings.lockDuration,
+    remaining: lockDuration,
     task: { ...task },
     unlockProgress: 0,
     unlockTimer: null,
@@ -308,25 +324,25 @@ async function startLockScreen(task) {
       task: {
         title: task.title,
         desc: task.desc,
-        duration: settings.lockDuration,
+        duration: lockDuration,
         icon: task.icon
       }
     });
   } catch (e) {
     console.error('Failed to enter lock mode', e);
   }
-  
+
   renderFullUI();
-  
+
   const lockInterval = setInterval(() => {
     if (!lockScreenState.active) {
       clearInterval(lockInterval);
       return;
     }
-    
+
     lockScreenState.remaining--;
     updateLockScreenTimer();
-    
+
     if (lockScreenState.remaining <= 0) {
       clearInterval(lockInterval);
       showLockConfirm();
@@ -380,7 +396,8 @@ function updateLockScreenTimer() {
   }
 
   if (progressEl) {
-    const total = settings.lockDuration;
+    // 使用任务级别的锁屏时长，如果没有则使用全局设置
+    const total = lockScreenState.task?.lockDuration || settings.lockDuration;
     const offset = 565 * (1 - lockScreenState.remaining / total);
     progressEl.style.strokeDashoffset = offset;
   }
@@ -441,7 +458,7 @@ function addTask() {
   const id = 'task_' + Date.now();
   settings.tasks.push({
     id: id, title: '新提醒', desc: '又是充满活力的一天，记得休息哦~',
-    interval: 30, enabled: true, icon: 'bell'
+    interval: 30, enabled: true, icon: 'bell', lockDuration: 60, autoResetOnIdle: true
   });
   countdowns[id] = 30 * 60;
   saveSettings();
@@ -546,7 +563,13 @@ function updateLiveValues() {
 
   const timerLabel = document.querySelector('.timer-label');
   if (timerLabel) {
-    timerLabel.innerText = (nextTask ? nextTask.title : '无活动任务') + (isPaused ? ' (已暂停)' : '');
+    let statusText = nextTask ? nextTask.title : '无活动任务';
+    if (isPaused) {
+      statusText += ' (已暂停)';
+    } else if (isIdle) {
+      statusText += ' (空闲中)';
+    }
+    timerLabel.innerText = statusText;
   }
 
   const mainRing = document.querySelector('.timer-ring .progress');
@@ -615,6 +638,19 @@ function renderFullUI() {
           </div>
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
             <div class="toggle ${task.enabled ? 'active' : ''}" data-toggle-id="${task.id}"></div>
+            ${settings.lockScreenEnabled ? `
+            <div class="task-extra-options">
+              <label class="idle-reset-option" title="系统锁屏或空闲时自动重置此任务">
+                <input type="checkbox" class="idle-reset-input" data-id="${task.id}" ${task.autoResetOnIdle ? 'checked' : ''}>
+                <span class="checkmark"></span>
+                <span class="option-label">空闲重置</span>
+              </label>
+              <div class="lock-duration-option">
+                <input type="number" class="lock-duration-input" value="${task.lockDuration || settings.lockDuration}" data-id="${task.id}" min="5" max="3600">
+                <span class="option-label">秒</span>
+              </div>
+            </div>
+            ` : ''}
             ${!['sit', 'water', 'eye'].includes(task.id) ? `<div class="remove-btn" data-id="${task.id}" style="color:var(--danger); cursor:pointer;">${ICONS.trash}</div>` : ''}
           </div>
         </div>
@@ -637,14 +673,14 @@ function renderFullUI() {
         </div>
         <div class="toggle ${settings.lockScreenEnabled ? 'active' : ''}" id="lockToggle"></div>
       </div>
-      <div class="setting-row" style="${settings.lockScreenEnabled ? '' : 'opacity:0.5; pointer-events:none;'}">
-        <label>锁屏时长</label>
-        <div class="duration-select">
-          <button class="duration-btn ${settings.lockDuration === 20 ? 'active' : ''}" data-duration="20">20秒</button>
-          <button class="duration-btn ${settings.lockDuration === 30 ? 'active' : ''}" data-duration="30">30秒</button>
-          <button class="duration-btn ${settings.lockDuration === 60 ? 'active' : ''}" data-duration="60">1分钟</button>
-          <button class="duration-btn ${settings.lockDuration === 300 ? 'active' : ''}" data-duration="300">5分钟</button>
-          <button class="duration-btn ${settings.lockDuration === 600 ? 'active' : ''}" data-duration="600">10分钟</button>
+      <div class="setting-row">
+        <div class="setting-info">
+          <label>空闲检测阈值</label>
+          <span class="setting-desc">超过此时间无操作视为空闲${isIdle ? ' (当前空闲中)' : ''}</span>
+        </div>
+        <div class="idle-threshold-input-group">
+          <input type="number" class="idle-threshold-input" id="idleThresholdInput" value="${Math.floor(settings.idleThreshold / 60)}" min="1" max="60">
+          <span class="input-unit">分钟</span>
         </div>
       </div>
       <div class="setting-row">
@@ -786,14 +822,6 @@ function bindEvents() {
     });
   });
 
-  document.querySelectorAll('.duration-btn').forEach(el => {
-    el.addEventListener('click', () => {
-      settings.lockDuration = parseInt(el.dataset.duration);
-      saveSettings();
-      renderFullUI();
-    });
-  });
-
   document.querySelectorAll('.interval-input').forEach(el => {
     el.addEventListener('input', (e) => {
       const val = parseInt(e.target.value);
@@ -838,6 +866,32 @@ function bindEvents() {
     el.addEventListener('click', () => removeTask(el.dataset.id));
   });
 
+  // 任务级别的空闲重置勾选框
+  document.querySelectorAll('.idle-reset-input').forEach(el => {
+    el.addEventListener('change', (e) => {
+      const id = el.dataset.id;
+      const task = settings.tasks.find(t => t.id === id);
+      if (task) {
+        task.autoResetOnIdle = e.target.checked;
+        saveSettings();
+        syncTasksToBackend();
+      }
+    });
+  });
+
+  // 任务级别的锁屏时长输入框
+  document.querySelectorAll('.lock-duration-input').forEach(el => {
+    el.addEventListener('input', (e) => {
+      const id = el.dataset.id;
+      const task = settings.tasks.find(t => t.id === id);
+      const val = parseInt(e.target.value);
+      if (task && val >= 5) {
+        task.lockDuration = val;
+        saveSettings();
+      }
+    });
+  });
+
   document.getElementById('addTaskBtn').onclick = addTask;
   document.getElementById('pauseBtn').onclick = togglePause;
   document.getElementById('resetBtn').onclick = resetAll;
@@ -879,6 +933,18 @@ function bindEvents() {
       } else {
         // 否则检查更新
         checkForUpdates(true);
+      }
+    });
+  }
+
+  const idleThresholdInput = document.getElementById('idleThresholdInput');
+  if (idleThresholdInput) {
+    idleThresholdInput.addEventListener('input', async (e) => {
+      const minutes = parseInt(e.target.value);
+      if (minutes >= 1 && minutes <= 60) {
+        settings.idleThreshold = minutes * 60;  // 转换为秒
+        saveSettings();
+        await invoke('set_idle_threshold', { seconds: settings.idleThreshold }).catch(console.error);
       }
     });
   }

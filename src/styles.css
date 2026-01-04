@@ -893,3 +893,120 @@ body {
   color: var(--text);
   font-weight: 500;
 }
+
+/* 任务级别额外选项 */
+.task-extra-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.idle-reset-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.idle-reset-option input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.idle-reset-option .checkmark {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.idle-reset-option input:checked ~ .checkmark {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.idle-reset-option .checkmark::after {
+  content: '';
+  position: absolute;
+  display: none;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.idle-reset-option input:checked ~ .checkmark::after {
+  display: block;
+}
+
+.idle-reset-option .option-label {
+  white-space: nowrap;
+}
+
+.lock-duration-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lock-duration-input {
+  width: 50px;
+  padding: 2px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: var(--text);
+  text-align: center;
+}
+
+.lock-duration-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.lock-duration-option .option-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* 空闲阈值设置 */
+.idle-threshold-input-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.idle-threshold-input {
+  width: 60px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: var(--text);
+  text-align: center;
+}
+
+.idle-threshold-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.input-unit {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
