@@ -138,7 +138,7 @@ npm run tauri build
 
 ## 📜 版本记录
 
-> ### 自动检查更新 || 手动检查更新 || 安装包更新 || Scoop 更新 
+> ### 多种更新方式：自动检查更新 || 手动检查更新 || 安装包更新 || Scoop 更新 
 > <img width="505" height="192" alt="image" src="https://github.com/user-attachments/assets/31e4d792-6800-4540-bead-58024aa3ba08" />
 > <img width="377" height="184" alt="image" src="https://github.com/user-attachments/assets/e54b30f4-97c8-4561-9c69-9373a15137ea" />
 
