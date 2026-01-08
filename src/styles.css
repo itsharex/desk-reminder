@@ -256,30 +256,40 @@ body {
   opacity: 1;
 }
 
-/* 卡片底部选项 */
+/* 卡片底部选项 (可收起) */
 .card-footer {
-  display: grid;
+  display: none; /* 默认隐藏 */
   grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  background: var(--border); /* Borders between items */
+  gap: 16px;
+  background: #f9f9f9; /* 浅灰背景 */
   border-top: 1px solid var(--border);
-  padding: 0;
+  padding: 16px 20px;
+  animation: slideDown 0.2s ease-out;
+}
+
+.reminder-card.expanded .card-footer {
+  display: grid;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .footer-option {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 10px 4px;
   gap: 6px;
-  background: var(--bg-card);
+  background: transparent;
+  padding: 0;
   cursor: default;
 }
 
 .footer-option span:first-child {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: var(--text-muted);
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -287,32 +297,34 @@ body {
 .footer-option span:last-child {
   font-size: 0.7rem;
   color: var(--text-muted);
+  margin-top: 2px;
 }
 
 .footer-option .lock-input {
-  width: 40px;
-  padding: 4px;
-  background: var(--bg);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  color: var(--primary);
+  width: 100%;
+  max-width: 60px;
+  padding: 6px 4px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--text);
   text-align: center;
   font-weight: 600;
   transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .footer-option .lock-input:focus {
   outline: none;
-  background: white;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+  transform: translateY(-1px);
 }
 
 .footer-option input[type="checkbox"] {
   display: none;
 }
-/* Removed old checkbox styles as they are no longer used */
 .footer-option .checkbox-custom { display: none; }
 .reminder-card .toggle, 
 .setting-row .toggle {
