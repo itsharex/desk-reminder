@@ -167,6 +167,9 @@ async function init() {
       
       if (info.enabled && !isIdle && !isPaused && preNotifyTime > 0 && info.remaining === preNotifyTime) {
         if (task) {
+           if (settings.soundEnabled) {
+             invoke('play_notification_sound').catch(() => {});
+           }
            invoke('show_notification', { 
              title: `即将提醒：${task.title}`, 
              body: `还有 ${preNotifyTime} 秒将触发提醒，请做好准备。` 
@@ -682,7 +685,7 @@ function updateLiveValues() {
         const snoozeState = snoozedStatus[task.id];
         if (snoozeState && snoozeState.active) {
           card.classList.add('snoozed'); // 动态添加样式类
-          timeDisplay.innerText = `推迟中: ${formatTime(snoozeState.remaining)}`;
+          timeDisplay.innerText = `推迟中: ${formatTime(current)}`;
           timeDisplay.style.color = 'var(--warning)';
         } else {
           card.classList.remove('snoozed'); // 移除样式类

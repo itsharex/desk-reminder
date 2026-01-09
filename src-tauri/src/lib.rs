@@ -505,8 +505,13 @@ fn get_countdowns() -> Vec<CountdownInfo> {
             now
         };
 
-        let elapsed = effective_now.saturating_duration_since(timer.reset_time).as_secs();
-        let remaining = if elapsed >= total_secs { 0 } else { total_secs - elapsed };
+        let remaining = if timer.reset_time > effective_now {
+            let wait_time = timer.reset_time.duration_since(effective_now).as_secs();
+            total_secs + wait_time
+        } else {
+            let elapsed = effective_now.saturating_duration_since(timer.reset_time).as_secs();
+            if elapsed >= total_secs { 0 } else { total_secs - elapsed }
+        };
         
         let snooze_remaining = if timer.reset_time > now {
             timer.reset_time.duration_since(now).as_secs()
