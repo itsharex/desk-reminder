@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::thread;
 use tauri::{
     menu::{Menu, MenuItem, Submenu},
@@ -123,7 +123,13 @@ fn get_idle_seconds_linux() -> u64 {
 }
 
 struct TrayState(Mutex<Option<TrayIcon>>);
-struct LockState(Mutex<Vec<String>>);
+
+struct LockStateInner {
+    windows: Vec<String>,
+    args: Option<LockTaskArgs>,
+}
+struct LockState(Mutex<LockStateInner>);
+
 struct PauseMenuState(Mutex<Option<MenuItem<tauri::Wry>>>);
 
 // ============= 后端定时器系统 =============
@@ -264,7 +270,7 @@ unsafe extern "system" fn session_wnd_proc(
     DefWindowProcW(hwnd, msg, wparam, lparam)
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
 struct LockTaskArgs {
     title: String,
     desc: String,
@@ -722,32 +728,64 @@ fn start_timer_thread(app_handle: AppHandle) {
             if is_locked {
                 // 主窗口
                 if let Some(window) = app_handle.get_webview_window("main") {
-                    if !window.is_visible().unwrap_or(false) {
-                        let _ = window.show();
-                    }
-                    if !window.is_focused().unwrap_or(false) {
-                        let _ = window.set_focus();
-                    }
+                    if !window.is_visible().unwrap_or(false) { let _ = window.show(); }
+                    if !window.is_focused().unwrap_or(false) { let _ = window.set_focus(); }
                     let _ = window.set_always_on_top(true);
                 }
 
-                // 从属窗口
                 let lock_state = app_handle.state::<LockState>();
-                // 获取锁并克隆列表，尽快释放锁
-                let slave_windows: Vec<String> = {
-                    let guard = lock_state.0.lock().unwrap();
-                    guard.clone()
-                };
-                
-                for label in slave_windows {
-                    if let Some(window) = app_handle.get_webview_window(&label) {
-                        if !window.is_visible().unwrap_or(false) {
-                            let _ = window.show();
-                        }
-                        if !window.is_focused().unwrap_or(false) {
-                            let _ = window.set_focus();
-                        }
+                let mut guard = lock_state.0.lock().unwrap();
+                let windows = guard.windows.clone();
+                let args = guard.args.clone();
+
+                for label in &windows {
+                    if let Some(window) = app_handle.get_webview_window(label) {
+                        if !window.is_visible().unwrap_or(false) { let _ = window.show(); }
+                        if !window.is_focused().unwrap_or(false) { let _ = window.set_focus(); }
                         let _ = window.set_always_on_top(true);
+                    }
+                }
+
+                // Self-Healing
+                if let Ok(monitors) = app_handle.available_monitors() {
+                    let mut covered_indices = HashSet::new();
+                    
+                    if let Some(main_win) = app_handle.get_webview_window("main") {
+                        if let Ok(pos) = main_win.outer_position() {
+                            for (i, m) in monitors.iter().enumerate() {
+                                if m.position().x == pos.x && m.position().y == pos.y {
+                                    covered_indices.insert(i);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    for label in &windows {
+                        if let Some(slave) = app_handle.get_webview_window(label) {
+                            if let Ok(pos) = slave.outer_position() {
+                                for (i, m) in monitors.iter().enumerate() {
+                                    if m.position().x == pos.x && m.position().y == pos.y {
+                                        covered_indices.insert(i);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for (i, m) in monitors.iter().enumerate() {
+                        if !covered_indices.contains(&i) {
+                            let label = format!("lock-slave-{}", i);
+                            if let Some(win) = app_handle.get_webview_window(&label) {
+                                let _ = win.set_position(m.position().clone());
+                                let _ = win.set_size(tauri::Size::Physical(m.size().clone()));
+                                let _ = win.set_fullscreen(true);
+                            } else {
+                                if let Some(new_label) = create_slave_window(&app_handle, m, args.as_ref(), i) {
+                                    guard.windows.push(new_label);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -858,6 +896,47 @@ fn update_pause_menu(state: State<PauseMenuState>, paused: bool) {
     }
 }
 
+fn create_slave_window(app: &AppHandle, monitor: &tauri::Monitor, task: Option<&LockTaskArgs>, index: usize) -> Option<String> {
+    let label = format!("lock-slave-{}", index);
+    
+    let mut url_str = String::from("index.html?mode=lock_slave");
+    if let Some(t) = task {
+         let encoded: String = form_urlencoded::Serializer::new(String::new())
+            .append_pair("title", &t.title)
+            .append_pair("desc", &t.desc)
+            .append_pair("duration", &t.duration.to_string())
+            .append_pair("icon", &t.icon)
+            .append_pair("strict_mode", &t.strict_mode.to_string())
+            .append_pair("allow_strict_snooze", &t.allow_strict_snooze.to_string())
+            .append_pair("max_snooze_count", &t.max_snooze_count.to_string())
+            .append_pair("snooze_minutes", &t.snooze_minutes.to_string())
+            .append_pair("current_snooze_count", &t.current_snooze_count.to_string())
+            .finish();
+         url_str = format!("index.html?mode=lock_slave&{}", encoded);
+    }
+
+    if let Ok(slave) = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(PathBuf::from(url_str)))
+        .title("Lock Screen")
+        .always_on_top(true)
+        .closable(false)
+        .minimizable(false)
+        .decorations(false)
+        .resizable(false)
+        .skip_taskbar(true)
+        .visible(false)
+        .build() {
+            
+        let _ = slave.set_position(monitor.position().clone());
+        let _ = slave.set_size(tauri::Size::Physical(monitor.size().clone()));
+        let _ = slave.show();
+        let _ = slave.set_focus();
+        let _ = slave.set_fullscreen(true);
+        Some(label)
+    } else {
+        None
+    }
+}
+
 #[tauri::command]
 async fn enter_lock_mode(app: tauri::AppHandle, window: tauri::Window, state: State<'_, LockState>, task: Option<LockTaskArgs>) -> Result<(), String> {
     let _ = window.set_fullscreen(true);
@@ -879,46 +958,14 @@ async fn enter_lock_mode(app: tauri::AppHandle, window: tauri::Window, state: St
              }
         }
 
-        let label = format!("lock-slave-{}", i);
-        
-        let mut url_str = String::from("index.html?mode=lock_slave");
-        if let Some(ref t) = task {
-             let encoded: String = form_urlencoded::Serializer::new(String::new())
-                .append_pair("title", &t.title)
-                .append_pair("desc", &t.desc)
-                .append_pair("duration", &t.duration.to_string())
-                .append_pair("icon", &t.icon)
-                .append_pair("strict_mode", &t.strict_mode.to_string())
-                .append_pair("allow_strict_snooze", &t.allow_strict_snooze.to_string())
-                .append_pair("max_snooze_count", &t.max_snooze_count.to_string())
-                .append_pair("snooze_minutes", &t.snooze_minutes.to_string())
-                .append_pair("current_snooze_count", &t.current_snooze_count.to_string())
-                .finish();
-             url_str = format!("index.html?mode=lock_slave&{}", encoded);
-        }
-
-        if let Ok(slave) = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(PathBuf::from(url_str)))
-            .title("Lock Screen")
-            .always_on_top(true)
-            .closable(false)
-            .minimizable(false)
-            .decorations(false)
-            .resizable(false)
-            .skip_taskbar(true)
-            .visible(false)
-            .build() {
-                
-            let _ = slave.set_position(m.position().clone());
-            let _ = slave.set_size(tauri::Size::Physical(m.size().clone()));
-            let _ = slave.show();
-            let _ = slave.set_focus();
-            let _ = slave.set_fullscreen(true);
+        if let Some(label) = create_slave_window(&app, m, task.as_ref(), i) {
             created_windows.push(label);
         }
     }
     
     let mut state_guard = state.0.lock().unwrap();
-    state_guard.extend(created_windows);
+    state_guard.windows.extend(created_windows);
+    state_guard.args = task;
 
     Ok(())
 }
@@ -931,12 +978,13 @@ fn exit_lock_mode(app: tauri::AppHandle, window: tauri::Window, state: State<Loc
     let _ = window.set_minimizable(true);
 
     let mut state_guard = state.0.lock().unwrap();
-    for label in state_guard.iter() {
+    for label in state_guard.windows.iter() {
         if let Some(w) = app.get_webview_window(label) {
             let _ = w.close();
         }
     }
-    state_guard.clear();
+    state_guard.windows.clear();
+    state_guard.args = None;
 }
 
 pub fn run() {
@@ -973,7 +1021,7 @@ pub fn run() {
             get_idle_threshold,
         ])
         .manage(TrayState(Mutex::new(None)))
-        .manage(LockState(Mutex::new(Vec::new())))
+        .manage(LockState(Mutex::new(LockStateInner { windows: Vec::new(), args: None })))
         .manage(PauseMenuState(Mutex::new(None)))
         .setup(|app| {
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
