@@ -147,6 +147,7 @@ struct TaskTimer {
     triggered: bool,  // 本轮是否已触发
     disabled_at: Option<Instant>,  // 禁用时的时间点，用于计算暂停时长
     snoozed: bool, // 是否处于推迟状态
+    snooze_count: u32, // 当前已推迟次数
 }
 
 struct TimerState {
@@ -281,6 +282,7 @@ struct CountdownInfo {
     enabled: bool,
     snoozed: bool,   // 是否推迟中
     snooze_remaining: u64, // 推迟剩余时间
+    snooze_count: u32, // 当前已推迟次数
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -358,6 +360,7 @@ fn sync_tasks(app: tauri::AppHandle, tasks: Vec<TaskConfig>) {
                         triggered: false,
                         disabled_at: None,
                         snoozed: false,
+                        snooze_count: 0,
                     });
                 } else if was_disabled && is_now_enabled {
                     // 从禁用变为启用，补偿禁用期间的时间
@@ -372,6 +375,7 @@ fn sync_tasks(app: tauri::AppHandle, tasks: Vec<TaskConfig>) {
                         triggered: existing.triggered,
                         disabled_at: None,
                         snoozed: existing.snoozed,
+                        snooze_count: existing.snooze_count,
                     });
                 } else if was_enabled && is_now_disabled {
                     // 从启用变为禁用，记录禁用时间点
@@ -381,6 +385,7 @@ fn sync_tasks(app: tauri::AppHandle, tasks: Vec<TaskConfig>) {
                         triggered: existing.triggered,
                         disabled_at: Some(now),
                         snoozed: existing.snoozed,
+                        snooze_count: existing.snooze_count,
                     });
                 } else {
                     // 状态没变，保留
@@ -390,6 +395,7 @@ fn sync_tasks(app: tauri::AppHandle, tasks: Vec<TaskConfig>) {
                         triggered: existing.triggered,
                         disabled_at: existing.disabled_at,
                         snoozed: existing.snoozed,
+                        snooze_count: existing.snooze_count,
                     });
                 }
             } else {
@@ -400,6 +406,7 @@ fn sync_tasks(app: tauri::AppHandle, tasks: Vec<TaskConfig>) {
                     triggered: false,
                     disabled_at: if task.enabled { None } else { Some(now) },
                     snoozed: false,
+                    snooze_count: 0,
                 });
             }
         }
@@ -443,6 +450,7 @@ fn timer_reset_task(task_id: String) {
         timer.reset_time = now;
         timer.triggered = false;
         timer.snoozed = false;
+        timer.snooze_count = 0;
         // 如果任务禁用，也更新 disabled_at
         if timer.disabled_at.is_some() {
             timer.disabled_at = Some(now);
@@ -458,6 +466,7 @@ fn timer_reset_all() {
         timer.reset_time = now;
         timer.triggered = false;
         timer.snoozed = false;
+        timer.snooze_count = 0;
         // 如果任务禁用，也更新 disabled_at
         if timer.disabled_at.is_some() {
             timer.disabled_at = Some(now);
@@ -477,6 +486,7 @@ fn timer_snooze_task(task_id: String, minutes: u64) {
         // 但需要把 triggered 设为 false，否则主循环会认为它还在触发状态
         timer.triggered = false;
         timer.snoozed = true;
+        timer.snooze_count += 1;
     }
 }
 
@@ -511,6 +521,7 @@ fn get_countdowns() -> Vec<CountdownInfo> {
             enabled: timer.config.enabled,
             snoozed: timer.snoozed,
             snooze_remaining,
+            snooze_count: timer.snooze_count,
         }
     }).collect()
 }
@@ -977,6 +988,7 @@ pub fn run() {
                             timer.reset_time = now;
                             timer.triggered = false;
                             timer.snoozed = false;
+                            timer.snooze_count = 0;
                             if timer.disabled_at.is_some() {
                                 timer.disabled_at = Some(now);
                             }
