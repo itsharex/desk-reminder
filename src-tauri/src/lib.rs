@@ -778,6 +778,7 @@ fn start_timer_thread(app_handle: AppHandle) {
                 // 主窗口
                 if let Some(window) = app_handle.get_webview_window("main") {
                     if !window.is_visible().unwrap_or(false) { let _ = window.show(); }
+                    let _ = window.unminimize();
                     if !window.is_focused().unwrap_or(false) { let _ = window.set_focus(); }
                     let _ = window.set_always_on_top(true);
                 }
@@ -921,6 +922,7 @@ fn show_notification(app: tauri::AppHandle, title: String, body: String) {
 
 #[tauri::command]
 fn show_main_window(window: tauri::Window) {
+    let _ = window.unminimize();
     let _ = window.show();
     let _ = window.set_focus();
 }
@@ -1009,6 +1011,8 @@ fn create_slave_window(app: &AppHandle, monitor: &tauri::Monitor, task: Option<&
 
 #[tauri::command]
 async fn enter_lock_mode(app: tauri::AppHandle, window: tauri::Window, state: State<'_, LockState>, task: Option<LockTaskArgs>) -> Result<(), String> {
+    let _ = window.unminimize();
+    let _ = window.show();
     let _ = window.set_fullscreen(true);
     let _ = window.set_always_on_top(true);
     let _ = window.set_closable(false);
@@ -1112,6 +1116,7 @@ pub fn run() {
                         app.exit(0);
                     } else if id_str == "show" {
                         if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
@@ -1142,6 +1147,7 @@ pub fn run() {
                     } = event {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
@@ -1177,6 +1183,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = _event {
                 if let Some(window) = _app_handle.get_webview_window("main") {
+                    let _ = window.unminimize();
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
