@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)](https://tauri.app/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.5.6-orange?style=flat-square)](https://github.com/)
+[![Version](https://img.shields.io/badge/Version-1.5.7-orange?style=flat-square)](https://github.com/)
 
 在快节奏的数字时代，健康的身体是高效生产力的基石。**健康办公助手** 是一款基于 Rust 与 Tauri 开发的高性能桌面应用，旨在通过智能化的任务排程与多维提醒，帮助你在专注工作的同时，科学地进行久坐、补水与用眼休息。
 
@@ -152,6 +152,11 @@ npm run tauri build
 
 > #### scoop 更新命令
 > scoop update health-reminder
+
+### v1.5.7 (2026-01-16)
+- **合并任务功能 (Merge Tasks)**：新增“合并任务”功能，当多个任务临近触发时（可设置阈值），系统会智能地将其合并为一次休息，避免连续不断的打断，彻底解决“刚坐下又响了”的烦恼。
+- **锁屏体验优化**：锁屏界面现可显示所有合并的任务名称，让您清楚知道当前休息包含哪些项目。
+- **逻辑修复**：修复了在合并任务时，推迟操作和解锁操作未能正确清理所有相关任务的问题。
 
 ### v1.5.6 (2026-01-13)
 - **Bug 修复**：修复了界面最小化时可能导致锁屏功能异常的问题。

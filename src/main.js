@@ -41,7 +41,7 @@ let settings = {
   advancedSettingsOpen: false, // 高级设置展开状态
   maxSnoozeCount: 1,   // 最大推迟次数
   allowStrictSnooze: false, // 严格模式下是否允许推迟
-  enableMerge: false,  // 是否合并临近任务
+  enableMerge: true,  // 是否合并临近任务
   mergeThreshold: 60,  // 合并阈值（秒）
   language: 'zh-CN',   // 界面语言
 };

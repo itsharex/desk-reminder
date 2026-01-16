@@ -1,7 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
-  "version": "1.5.6",
-  "description": "健康办公助手 - 智能化的久坐、补水与用眼休息提醒工具",
+{
+    "version": "1.5.7",
+    "description": "Health Reminder - A minimalist, precise and efficient health guardian app.",
   "homepage": "https://github.com/kaima2022/desk-reminder",
   "license": "MIT",
   "architecture": {
