@@ -127,8 +127,9 @@ jobs:
           VERSION=${VERSION#v}  # 移除 v 前缀
 
           # 更新 bucket/health-reminder.json
+          # 更新 version、architecture.64bit.url 和 architecture.64bit.hash
           jq --arg version "$VERSION" --arg hash "$HASH" \
-            '.version = $version | .hash = $hash' \
+            '.version = $version | .architecture."64bit".url = "https://github.com/kaima2022/desk-reminder/releases/download/v\($version)/health-reminder_\($version)_x64-setup.exe" | .architecture."64bit".hash = $hash' \
             bucket/health-reminder.json > bucket/health-reminder.json.tmp
 
           mv bucket/health-reminder.json.tmp bucket/health-reminder.json

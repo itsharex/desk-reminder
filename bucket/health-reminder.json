@@ -6,8 +6,8 @@
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/kaima2022/desk-reminder/releases/download/v1.5.0/health-reminder_1.5.0_x64-setup.exe",
-      "hash": ""
+      "url": "https://github.com/kaima2022/desk-reminder/releases/download/v1.5.7/health-reminder_1.5.7_x64-setup.exe",
+      "hash": "1799318ea4bb2f57b1992693f4b55685a9002d715fd6e66a3d400970c71f07b5"
     }
   },
   "installer": {
@@ -25,6 +25,5 @@
         "url": "https://github.com/kaima2022/desk-reminder/releases/download/v$version/health-reminder_$version_x64-setup.exe"
       }
     }
-  },
-  "hash": "1799318ea4bb2f57b1992693f4b55685a9002d715fd6e66a3d400970c71f07b5"
+  }
 }

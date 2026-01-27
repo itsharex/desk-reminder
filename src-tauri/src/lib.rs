@@ -496,6 +496,10 @@ fn timer_resume() {
             // 补偿暂停时间
             for timer in state.tasks.values_mut() {
                 timer.reset_time += pause_duration;
+                // 如果任务被禁用，也需要同步更新 disabled_at，保持相对时间不变
+                if let Some(ref mut disabled_at) = timer.disabled_at {
+                    *disabled_at += pause_duration;
+                }
             }
         }
         state.paused = false;
@@ -617,9 +621,17 @@ fn timer_set_system_locked(locked: bool) {
                 // 勾选了"空闲重置"，直接重置为初始值
                 timer.reset_time = now;
                 timer.triggered = false;
+                // 如果任务被禁用，也更新 disabled_at
+                if timer.disabled_at.is_some() {
+                    timer.disabled_at = Some(now);
+                }
             } else if let Some(duration) = pause_duration {
                 // 没有勾选，补偿暂停时间
                 timer.reset_time += duration;
+                // 如果任务被禁用，也需要同步更新 disabled_at，保持相对时间不变
+                if let Some(ref mut disabled_at) = timer.disabled_at {
+                    *disabled_at += duration;
+                }
             }
         }
 
