@@ -265,9 +265,21 @@ npm run tauri build
 
 ---
 
-## 📄 许可证
+## 许可证
 
 本项目遵循 **MIT License**。您可以自由地使用、修改和分发。
+
+---
+
+## Star History
+
+<a href="https://star-history.com/#kaima2022/Health-reminder&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=kaima2022/Health-reminder&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=kaima2022/Health-reminder&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=kaima2022/Health-reminder&type=Date" />
+ </picture>
+</a>
 
 ---
 © 2025 健康办公助手. 愿你每天都有好身体。
