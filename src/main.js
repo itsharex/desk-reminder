@@ -4,6 +4,8 @@ import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { requestPermission } from '@tauri-apps/plugin-notification';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { t, setLocale, getLocale, getSupportedLocales, detectLocale } from './i18n/index.js';
 
 const ICONS = {
@@ -44,6 +46,7 @@ let settings = {
   enableMerge: true,  // 是否合并临近任务
   mergeThreshold: 60,  // 合并阈值（秒）
   language: 'zh-CN',   // 界面语言
+  lockScreenBgImage: '',  // 锁屏背景图片路径
 };
 
 let countdowns = {};  // 现在由后端事件更新
@@ -1130,6 +1133,26 @@ function renderFullUI() {
 
         <div class="setting-row">
           <div class="setting-info">
+            <label>${t('settings.customBgImage')}</label>
+            <span class="setting-desc">${t('settings.customBgImageDesc')}</span>
+          </div>
+          <button class="preset-btn" id="selectBgImageBtn" style="padding:6px 12px;">
+            ${settings.lockScreenBgImage ? t('buttons.changeBg') : t('buttons.selectBg')}
+          </button>
+        </div>
+        ${settings.lockScreenBgImage ? `
+        <div class="setting-row" style="padding-left:20px;">
+          <div class="setting-info">
+            <span class="setting-desc" style="font-size:0.75rem; word-break:break-all;">${settings.lockScreenBgImage}</span>
+          </div>
+          <button class="preset-btn" id="clearBgImageBtn" style="padding:4px 8px; background:var(--danger); color:white;">
+            ${t('buttons.clear')}
+          </button>
+        </div>
+        ` : ''}
+
+        <div class="setting-row">
+          <div class="setting-info">
             <label>${t('settings.version')}</label>
             <span class="setting-desc">${updateInfo ? t('settings.newVersion', { version: updateInfo.version }) : t('settings.currentVersion')}</span>
           </div>
@@ -1169,7 +1192,7 @@ function renderFullUI() {
       </div>
     </div>
 
-    <div class="lock-screen ${lockScreenState.active ? 'show' : ''}">
+    <div class="lock-screen ${lockScreenState.active ? 'show' : ''}" style="${settings.lockScreenBgImage ? `background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('${convertFileSrc(settings.lockScreenBgImage)}'); background-size: cover; background-position: center;` : ''}">
       <div class="lock-screen-content">
         <div class="lock-timer-ring">
           <svg width="200" height="200" viewBox="0 0 200 200">
@@ -1551,6 +1574,34 @@ function bindEvents() {
         settings.maxSnoozeCount = count;
         saveSettings();
       }
+    });
+  }
+
+  const selectBgImageBtn = document.getElementById('selectBgImageBtn');
+  if (selectBgImageBtn) {
+    selectBgImageBtn.addEventListener('click', async () => {
+      const selected = await openDialog({
+        multiple: false,
+        filters: [{
+          name: 'Images',
+          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']
+        }]
+      });
+      
+      if (selected) {
+        settings.lockScreenBgImage = selected;
+        saveSettings();
+        renderFullUI();
+      }
+    });
+  }
+
+  const clearBgImageBtn = document.getElementById('clearBgImageBtn');
+  if (clearBgImageBtn) {
+    clearBgImageBtn.addEventListener('click', () => {
+      settings.lockScreenBgImage = '';
+      saveSettings();
+      renderFullUI();
     });
   }
 
