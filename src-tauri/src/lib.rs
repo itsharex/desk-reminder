@@ -695,11 +695,16 @@ fn start_timer_thread(app_handle: AppHandle) {
         #[cfg(not(target_os = "linux"))]
         let base_interval = Duration::from_secs(1);
 
+        #[cfg(target_os = "linux")]
         let mut tick_counter: u32 = 0;
 
         loop {
             thread::sleep(base_interval);
-            tick_counter += 1;
+
+            #[cfg(target_os = "linux")]
+            {
+                tick_counter += 1;
+            }
 
             // Check if we should run the full timer logic (every 1 second)
             #[cfg(target_os = "linux")]
@@ -796,9 +801,12 @@ fn start_timer_thread(app_handle: AppHandle) {
             }
 
             // Reset counter and run timer logic
+            #[cfg(target_os = "linux")]
             if should_run_timer_logic {
                 tick_counter = 0;
-            } else {
+            }
+
+            if !should_run_timer_logic {
                 continue; // Skip the rest of the loop on Linux intermediate ticks
             }
 
