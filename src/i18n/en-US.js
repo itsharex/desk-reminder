@@ -57,6 +57,9 @@ export default {
     checking: 'Checking...',
     test: 'Test',
     confirmRest: 'Rest Completed',
+    selectBg: 'Select Image',
+    changeBg: 'Change Image',
+    clear: 'Clear',
   },
 
   // Lock screen
@@ -100,6 +103,8 @@ export default {
     currentVersion: 'Current version v1.5.9',
     newVersion: 'Current version v1.5.9 (New version v{version} available)',
     language: 'Language',
+    customBgImage: 'Custom Lock Screen Background',
+    customBgImageDesc: 'Select an image for the lock screen background',
   },
 
   // Task card

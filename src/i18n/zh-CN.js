@@ -57,6 +57,9 @@ export default {
     checking: '检查中...',
     test: '测试',
     confirmRest: '已完成休息',
+    selectBg: '选择图片',
+    changeBg: '更换图片',
+    clear: '清除',
   },
 
   // 锁屏
@@ -100,6 +103,8 @@ export default {
     currentVersion: '当前版本 v1.5.9',
     newVersion: '当前版本 v1.5.9（有新版本 v{version}）',
     language: '语言',
+    customBgImage: '自定义锁屏背景',
+    customBgImageDesc: '选择一张图片作为锁屏背景',
   },
 
   // 任务卡片
