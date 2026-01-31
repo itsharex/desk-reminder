@@ -797,6 +797,13 @@ fn start_timer_thread(app_handle: AppHandle) {
                     let _ = window.unminimize();
                     if !window.is_focused().unwrap_or(false) { let _ = window.set_focus(); }
                     let _ = window.set_always_on_top(true);
+                    
+                    // Linux-specific: More aggressive focus enforcement
+                    #[cfg(target_os = "linux")]
+                    {
+                        let _ = window.set_always_on_top(true);
+                        let _ = window.set_focus();
+                    }
                 }
 
                 let lock_state = app_handle.state::<LockState>();
@@ -809,6 +816,14 @@ fn start_timer_thread(app_handle: AppHandle) {
                         if !window.is_visible().unwrap_or(false) { let _ = window.show(); }
                         if !window.is_focused().unwrap_or(false) { let _ = window.set_focus(); }
                         let _ = window.set_always_on_top(true);
+                        
+                        // Linux-specific: More aggressive focus and position enforcement
+                        #[cfg(target_os = "linux")]
+                        {
+                            let _ = window.set_always_on_top(true);
+                            let _ = window.set_fullscreen(true);
+                            let _ = window.set_focus();
+                        }
                     }
                 }
 
@@ -1012,6 +1027,7 @@ fn create_slave_window(app: &AppHandle, monitor: &tauri::Monitor, task: Option<&
         .resizable(false)
         .skip_taskbar(true)
         .visible(false)
+        .focused(true)
         .build() {
             
         let _ = slave.set_position(monitor.position().clone());
@@ -1019,6 +1035,16 @@ fn create_slave_window(app: &AppHandle, monitor: &tauri::Monitor, task: Option<&
         let _ = slave.show();
         let _ = slave.set_focus();
         let _ = slave.set_fullscreen(true);
+        
+        // Additional focus and z-order enforcement for Linux
+        #[cfg(target_os = "linux")]
+        {
+            // Request focus again after fullscreen
+            let _ = slave.set_focus();
+            // On Linux, we may need to ensure the window is always on top multiple times
+            let _ = slave.set_always_on_top(true);
+        }
+        
         Some(label)
     } else {
         None
@@ -1051,6 +1077,21 @@ async fn enter_lock_mode(app: tauri::AppHandle, window: tauri::Window, state: St
         if let Some(label) = create_slave_window(&app, m, task.as_ref(), i) {
             created_windows.push(label);
         }
+    }
+    
+    // Additional focus enforcement for Linux after all windows are created
+    #[cfg(target_os = "linux")]
+    {
+        // Re-focus all slave windows to ensure they stay on top
+        for label in created_windows.iter() {
+            if let Some(w) = app.get_webview_window(label) {
+                let _ = w.set_focus();
+                let _ = w.set_always_on_top(true);
+            }
+        }
+        // Re-focus main window
+        let _ = window.set_focus();
+        let _ = window.set_always_on_top(true);
     }
     
     let mut state_guard = state.0.lock().unwrap();
