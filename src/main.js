@@ -112,10 +112,11 @@ async function init() {
     settings.strictMode = urlParams.get('strict_mode') === 'true';
     settings.allowStrictSnooze = urlParams.get('allow_strict_snooze') === 'true';
     settings.maxSnoozeCount = parseInt(urlParams.get('max_snooze_count') || '1');
-    
+    settings.lockScreenBgImage = urlParams.get('bg_image') || '';
+
     const taskSnoozeMinutes = parseInt(urlParams.get('snooze_minutes') || '5');
     const currentSnoozeCount = parseInt(urlParams.get('current_snooze_count') || '0');
-    
+
     task.snoozeMinutes = taskSnoozeMinutes;
     snoozedStatus[task.id] = { count: currentSnoozeCount, active: false, remaining: 0 };
 
@@ -464,7 +465,8 @@ async function startLockScreen(task, mergedTasks = []) {
         allow_strict_snooze: !!settings.allowStrictSnooze,
         max_snooze_count: parseInt(settings.maxSnoozeCount),
         snooze_minutes: parseInt(task.snoozeMinutes || 5),
-        current_snooze_count: parseInt(snoozedStatus[task.id]?.count || 0)
+        current_snooze_count: parseInt(snoozedStatus[task.id]?.count || 0),
+        bg_image: settings.lockScreenBgImage || ''
       }
     });
   } catch (e) {

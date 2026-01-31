@@ -325,6 +325,8 @@ struct LockTaskArgs {
     max_snooze_count: u32,
     snooze_minutes: u32,
     current_snooze_count: u32,
+    #[serde(default)]
+    bg_image: String,
 }
 
 // ============= 定时器命令 =============
@@ -1012,6 +1014,7 @@ fn create_slave_window(app: &AppHandle, monitor: &tauri::Monitor, task: Option<&
             .append_pair("max_snooze_count", &t.max_snooze_count.to_string())
             .append_pair("snooze_minutes", &t.snooze_minutes.to_string())
             .append_pair("current_snooze_count", &t.current_snooze_count.to_string())
+            .append_pair("bg_image", &t.bg_image)
             .finish();
          url_str = format!("index.html?mode=lock_slave&{}", encoded);
     }
