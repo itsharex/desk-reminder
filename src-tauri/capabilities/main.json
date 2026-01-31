@@ -5,6 +5,8 @@
   "windows": ["main", "lock-slave-*"],
   "permissions": [
     "core:default",
+    "core:image:default",
+    "core:image:allow-from-path",
     "notification:default",
     "autostart:default",
     "shell:default",

@@ -1192,7 +1192,15 @@ function renderFullUI() {
       </div>
     </div>
 
-    <div class="lock-screen ${lockScreenState.active ? 'show' : ''}" style="${settings.lockScreenBgImage && settings.lockScreenBgImage.trim() !== '' ? `background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('${convertFileSrc(settings.lockScreenBgImage)}'); background-size: cover; background-position: center;` : ''}">
+    <div class="lock-screen ${lockScreenState.active ? 'show' : ''}" style="${settings.lockScreenBgImage && settings.lockScreenBgImage.trim() !== '' ? `background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('${convertFileSrc(settings.lockScreenBgImage)}');` : ''}">
+      <!-- 调试信息 -->
+      <div style="position: fixed; top: 10px; left: 10px; right: 10px; background: rgba(0,0,0,0.8); color: #0f0; padding: 10px; font-size: 12px; font-family: monospace; z-index: 9999; word-break: break-all; max-height: 150px; overflow: auto;">
+        <div><b>DEBUG INFO:</b></div>
+        <div>原始路径: ${settings.lockScreenBgImage || '(未设置)'}</div>
+        <div>转换后URL: ${settings.lockScreenBgImage ? convertFileSrc(settings.lockScreenBgImage) : '(无)'}</div>
+        <div>路径类型: ${typeof settings.lockScreenBgImage}</div>
+        <div>路径长度: ${settings.lockScreenBgImage ? settings.lockScreenBgImage.length : 0}</div>
+      </div>
       <div class="lock-screen-content">
         <div class="lock-timer-ring">
           <svg width="200" height="200" viewBox="0 0 200 200">
@@ -1589,9 +1597,13 @@ function bindEvents() {
       });
       
       if (selected) {
-        settings.lockScreenBgImage = selected;
-        saveSettings();
-        renderFullUI();
+        // Tauri v2 dialog returns FilePath object, extract the path string
+        const imagePath = typeof selected === 'string' ? selected : selected.path;
+        if (imagePath) {
+          settings.lockScreenBgImage = imagePath;
+          saveSettings();
+          renderFullUI();
+        }
       }
     });
   }
