@@ -317,17 +317,18 @@ body {
 }
 
 .advanced-settings-content {
-  background: #fdfdfd;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 0 16px;
   margin-top: 4px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
 }
 
 .advanced-settings-content .setting-row {
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--border);
   padding: 10px 0;
 }
+
 
 .advanced-settings-content .setting-row:last-child {
   border-bottom: none;
